@@ -5,3 +5,4 @@ baileys_store.json
 *.log
 local_db.json
 .env
+*.traineddata

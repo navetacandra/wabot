@@ -16,6 +16,7 @@
     "file-type": "^18.5.0",
     "node-fetch": "^3.3.2",
     "openai": "^4.7.1",
+    "tesseract.js": "^4.1.2",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

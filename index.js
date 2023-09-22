@@ -42,7 +42,12 @@ const importCommandsFromLib = () => {
     delete require.cache[filePath];
 
     if (existsSync(filePath)) {
-      commands[f.replace(/\.js/, "")] = require(filePath);
+      try {
+        commands[f.replace(/\.js/, "")] = require(filePath);
+        console.log(`[Reload Library] ${f}`);
+      } catch (err) {
+        console.log(`[Error Reload Library] ${f}\n${err.toString()}`);
+      }
     }
   });
 };
@@ -58,6 +63,7 @@ const importLocalDB = () => {
 
   // Watch local db files update and re-import
   watch(localDbPath, "utf8", () => {
+    if (!existsSync(localDbPath)) writeFileSync(localDbPath, "{}");
     try {
       db = JSON.parse(readFileSync(localDbPath));
     } catch (err) {
@@ -88,6 +94,8 @@ const connectToWhatsApp = async () => {
   sock.author = "6285174254323@s.whatsapp.net";
   sock.dbPath = localDbPath;
   sock.db = db;
+  sock.queue = [];
+  sock.addQueue = (cb) => sock.queue.push(async () => await cb());
 
   // Save chats to file store
   sock.store = makeInMemoryStore({});
@@ -134,23 +142,29 @@ const connectToWhatsApp = async () => {
     if (m.key?.isBaileys) return;
 
     // Db check
-    if (!Object.keys(sock.db).includes(m.key?.author)) {
-      sock.db[m.key?.author] = {
+    if (!Object.keys(sock.db).includes(m.key?.remoteJid)) {
+      sock.db[m.key?.remoteJid] = {
         chatgpt_active: false,
         chatgpt_verified: false,
       };
-      writeFileSync(localDbPath, JSON.stringify(sock.db, null, 2));
+      sock.addQueue(
+        writeFileSync(localDbPath, JSON.stringify(sock.db, null, 2)),
+      );
     }
 
     // GPT features only when gpt enabled for user
     if (
-      sock.db[m.key.author].chatgpt_active &&
+      sock.db[m.key?.remoteJid].chatgpt_active &&
       !(
         prefix.filter((f) => m.text.startsWith(f)).length &&
         /(chat)?gpt/.test(m.text.substring(1).split(" ")[0])
       )
     ) {
-      m.reply(await commands.chat_gpt.handle_openai(sock, m, m.text));
+      sock.addQueue(sock.sendPresenceUpdate("composing", m.key?.remoteJid));
+      sock.addQueue(
+        m.reply(await commands.chat_gpt.handle_openai(sock, m, m.text)),
+      );
+      sock.addQueue(sock.sendPresenceUpdate("paused", m.key?.remoteJid));
       return;
     }
 
@@ -171,14 +185,17 @@ const connectToWhatsApp = async () => {
 
     // Ignore if command not found;
     if (!command) return;
-    try {
-      // Execute command when command exist
-      await command.exec(sock, m, args);
-    } catch (err) {
-      // Show command error
-      console.log(err);
-    }
+    sock.addQueue(sock.sendPresenceUpdate("composing", m.key?.remoteJid));
+    sock.addQueue(command.exec(sock, m, args));
+    sock.addQueue(sock.sendPresenceUpdate("paused", m.key?.remoteJid));
   });
+
+  while (sock.queue.length > 0) {
+    await sock.queue[0]();
+    sock.queue.shift();
+  }
+
+  // _sock.groupParticipantsUpdate("", [], "")
 };
 
 connectToWhatsApp();

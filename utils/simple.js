@@ -203,10 +203,10 @@ const simplifySocket = (sock) => {
     }
 
     // Delete unused options
-    delete options.asDocument;
-    delete options.asGIF;
-    delete options.asSticker;
-    delete options.mentions;
+    delete options?.asDocument;
+    delete options?.asGIF;
+    delete options?.asSticker;
+    delete options?.mentions;
 
     // Send message with created message's config
     return sock.sendMessage(jid, content, options);
@@ -269,7 +269,7 @@ const simplifySocket = (sock) => {
     // Get mentions
     const mentions = options?.mentions;
     // Remove unused options
-    delete options.mentions;
+    delete options?.mentions;
 
     // Send contact message
     return sock.sendMessage(
@@ -315,7 +315,7 @@ const simplifyMessage = (sock, m) => {
     // Reply as contact
     else if (options?.isMedia) {
       // Delete unused options
-      delete options.isMedia;
+      delete options?.isMedia;
       const { media, filename, caption } = content;
       // Send file with quoted message
       return sock.sendFile(m.key?.remoteJid, media, filename, caption, {
@@ -328,7 +328,7 @@ const simplifyMessage = (sock, m) => {
       // Get mentions
       const mentions = options?.mentions;
       // Delete unused options
-      delete options.mentions;
+      delete options?.mentions;
       // Send conversation message with quoted message
       return sock.sendMessage(
         m.key?.remoteJid,
