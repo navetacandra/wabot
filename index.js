@@ -192,7 +192,7 @@ const connectToWhatsApp = async () => {
 
   while (sock.queue.length > 0) {
     await sock.queue[0]();
-    sock.queue.shift();
+    await sock.queue.shift();
   }
 
   // _sock.groupParticipantsUpdate("", [], "")
