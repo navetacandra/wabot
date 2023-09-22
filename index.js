@@ -128,7 +128,6 @@ const connectToWhatsApp = async () => {
   sock.ev.on("messages.upsert", async ({ messages }) => {
     // Simplify coming message
     const m = simplifyMessage(sock, messages[0]);
-    if (m.key?.author == "status@broadcast") return;
     // Logging message to console and file
     messageLogger(sock, m);
     // Ignore if message come from baileys

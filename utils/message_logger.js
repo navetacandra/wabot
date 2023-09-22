@@ -29,7 +29,7 @@ const messageLogger = (sock, m) => {
     message = `[${timestamp}] ${kicked} was kicked from group ${m?.key?.remoteJid}`;
   } else {
     const isGroup = m?.key?.remoteJid?.endsWith("@g.us");
-    const typeChat = Object?.keys(m.message)[0] || "unknownMessageType";
+    const typeChat = Object.keys(m.message || {})[0] || "unknownMessageType";
     const jid = m?.key?.remoteJid?.split("@")[0];
     const author =
       m?.key?.fromMe && m?.key?.isBaileys
