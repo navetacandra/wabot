@@ -1,0 +1,25 @@
+{
+  "name": "wabot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "navetacandra <naveta.cand@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.4.1",
+    "awesome-phonenumber": "^5.10.0",
+    "dotenv": "^16.3.1",
+    "file-type": "^18.5.0",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.7.1",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "prettier": "^3.0.3",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
