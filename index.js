@@ -30,7 +30,7 @@ const importCommandsFromLib = () => {
     .filter((f) => f.endsWith(".js"))
     .forEach((f) => {
       commands[f.replace(/\.js/, "")] = require(
-        path.resolve(path.join(libPath, f))
+        path.resolve(path.join(libPath, f)),
       );
     });
 
@@ -119,7 +119,7 @@ const connectToWhatsApp = async () => {
       const shouldReconnect =
         lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
       console.log(
-        `Disconnected due to ${lastDisconnect.error}. Reconnecting: ${shouldReconnect}`
+        `Disconnected due to ${lastDisconnect.error}. Reconnecting: ${shouldReconnect}`,
       );
 
       if (shouldReconnect) {
@@ -148,7 +148,7 @@ const connectToWhatsApp = async () => {
         chatgpt_verified: false,
       };
       sock.addQueue(
-        writeFileSync(localDbPath, JSON.stringify(sock.db, null, 2))
+        writeFileSync(localDbPath, JSON.stringify(sock.db, null, 2)),
       );
     }
 
@@ -162,7 +162,7 @@ const connectToWhatsApp = async () => {
     ) {
       sock.addQueue(sock.sendPresenceUpdate("composing", m.key?.remoteJid));
       sock.addQueue(
-        m.reply(await commands.chat_gpt.handle_openai(sock, m, m.text))
+        m.reply(await commands.chat_gpt.handle_openai(sock, m, m.text)),
       );
       sock.addQueue(sock.sendPresenceUpdate("paused", m.key?.remoteJid));
       return;

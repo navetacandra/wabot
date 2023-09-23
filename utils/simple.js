@@ -25,6 +25,49 @@ const path = require("path");
  * @param {string} ext
  * @returns
  */
+const convertToPNG = (data, ext) => {
+  return new Promise(async (resolve, reject) => {
+    // Send error message if data not buffer
+    if (!Buffer.isBuffer(data)) throw new TypeError("data is not Buffer");
+    // Send error message if data not buffer
+    const dir = path.resolve(path.join(__dirname, "..", "temp"));
+    // Create temp directory
+    if (!existsSync(dir)) {
+      mkdirSync(dir);
+    }
+    // Declare file name
+    const filenameData = path.resolve(
+      path.join(__dirname, "..", "temp", `${Date.now()}_${v4()}.${ext}`),
+    );
+    const filenameResult = path.resolve(
+      path.join(__dirname, "..", "temp", `${Date.now()}_${v4()}.png`),
+    );
+
+    // Write input file
+    writeFileSync(filenameData, data);
+    // Convert input file to output
+    const convert = spawn("convert", [filenameData, filenameResult]);
+    // Send and display error message when convert error
+    convert.on("error", (err) => {
+      console.log(err);
+      reject(err);
+    });
+    // Send convert result and unlink temp file
+    convert.on("close", (code) => {
+      unlinkSync(filenameData);
+      if (code != 0) return reject(code);
+      resolve(readFileSync(filenameResult));
+      unlinkSync(filenameResult);
+    });
+  });
+};
+
+/**
+ *
+ * @param {*} data
+ * @param {string} ext
+ * @returns
+ */
 const convertToWEBP = (data, ext) => {
   return new Promise(async (resolve, reject) => {
     // Send error message if data not buffer
@@ -37,10 +80,10 @@ const convertToWEBP = (data, ext) => {
     }
     // Declare file name
     const filenameData = path.resolve(
-      path.join(__dirname, "..", "temp", `${Date.now()}-${v4()}.${ext}`)
+      path.join(__dirname, "..", "temp", `${Date.now()}-${v4()}.${ext}`),
     );
     const filenameResult = path.resolve(
-      path.join(__dirname, "..", "temp", `${Date.now()}-${v4()}.webp`)
+      path.join(__dirname, "..", "temp", `${Date.now()}-${v4()}.webp`),
     );
 
     // Write input file
@@ -247,7 +290,7 @@ const simplifySocket = (sock) => {
         const businessDesc = isBusiness
           ? ((await sock.getBusinessProfile(njid)).description || "").replace(
               /\n/g,
-              "\\n"
+              "\\n",
             )
           : "";
 
@@ -267,7 +310,7 @@ const simplifySocket = (sock) => {
             (isBusiness ? businessExtension : "") +
             "END:VCARD".trim(),
         };
-      })
+      }),
     );
 
     // Get mentions
@@ -282,7 +325,7 @@ const simplifySocket = (sock) => {
         contacts: { contacts: vcards, displayName: displayName },
         mentions: mentions,
       },
-      options
+      options,
     );
   };
 
@@ -337,7 +380,7 @@ const simplifyMessage = (sock, m) => {
       return sock.sendMessage(
         m.key?.remoteJid,
         { text: content, mentions: mentions },
-        { ...options, quoted: m }
+        { ...options, quoted: m },
       );
     }
   };
@@ -400,4 +443,9 @@ const simplifyMessage = (sock, m) => {
   return m;
 };
 
-module.exports = { simplifySocket, simplifyMessage };
+module.exports = {
+  simplifySocket,
+  simplifyMessage,
+  convertToPNG,
+  convertToWEBP,
+};
