@@ -1,9 +1,9 @@
+require("dotenv").config();
 const {
   makeWASocket,
   DisconnectReason,
   useMultiFileAuthState,
   Browsers,
-  makeInMemoryStore,
 } = require("@whiskeysockets/baileys");
 const {
   readdirSync,
@@ -52,30 +52,8 @@ const importCommandsFromLib = () => {
   });
 };
 
-const importLocalDB = () => {
-  // Import local db files
-  if (!existsSync(localDbPath)) writeFileSync(localDbPath, "{}");
-  try {
-    db = JSON.parse(readFileSync(localDbPath));
-  } catch (err) {
-    console.log("[Failed import local db]", err.toString());
-  }
-
-  // Watch local db files update and re-import
-  watch(localDbPath, "utf8", () => {
-    if (!existsSync(localDbPath)) writeFileSync(localDbPath, "{}");
-    try {
-      db = JSON.parse(readFileSync(localDbPath));
-    } catch (err) {
-      console.log("[Failed import local db]", err.toString());
-    }
-  });
-};
-
 // Import all command files
 importCommandsFromLib();
-// Import local db files
-importLocalDB();
 
 // Declare connectToWhatsApp function to connect socket to whatsapp
 const connectToWhatsApp = async () => {
@@ -89,23 +67,9 @@ const connectToWhatsApp = async () => {
     printQRInTerminal: true,
     syncFullHistory: true,
   });
+
   // Simplify socket
   const sock = simplifySocket(_sock);
-  sock.author = "6285174254323@s.whatsapp.net";
-  sock.dbPath = localDbPath;
-  sock.db = db;
-  sock.queue = [];
-  sock.addQueue = (cb) => sock.queue.push(async () => await cb());
-
-  // Save chats to file store
-  sock.store = makeInMemoryStore({});
-  sock.store.readFromFile("./baileys_store.json");
-  setInterval(() => {
-    sock.store.writeToFile("./baileys_store.json");
-  }, 1000);
-
-  // Bind event to store
-  sock.store.bind(sock.ev);
 
   // Save auth state
   sock.ev.on("creds.update", saveCreds);

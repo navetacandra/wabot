@@ -1,10 +1,12 @@
-const { proto } = require("@whiskeysockets/baileys");
+require("dotenv").config();
+const { proto, makeInMemoryStore } = require("@whiskeysockets/baileys");
 const {
   existsSync,
   readFileSync,
   writeFileSync,
   unlinkSync,
   mkdirSync,
+  watch,
 } = require("fs");
 const { v4 } = require("uuid");
 const { spawn } = require("child_process");
@@ -113,24 +115,25 @@ const convertToWEBP = (data, ext) => {
 };
 
 /**
+ * Simplifies the functionality of a socket.
  *
- * @param {*} sock
- * @returns
+ * @param {import("./type")._WASocket} sock - The socket to simplify.
+ * @returns {import("./type").SimplifiedSocket} - An object containing simplified socket functions.
  */
 const simplifySocket = (sock) => {
   /**
+   * Get file data from various sources.
    *
-   * @param {string} path
-   * @returns
+   * @param {string|Buffer} path - The path or data source.
+   * @returns {Promise<Object>} - An object containing file data and metadata.
    */
   const getFile = async (path) => {
     try {
       let res;
-      // Get buffer data from path
       let data = Buffer.isBuffer(path)
         ? path
         : /^data:.*?\/.*?;base64,/i.test(path)
-        ? Buffer.from(path.split`,`[1], "base64")
+        ? Buffer.from(path.split(",")[1], "base64")
         : /^https?:\/\//.test(path)
         ? await (res = await fetch(path)).buffer()
         : existsSync(path)
@@ -139,9 +142,8 @@ const simplifySocket = (sock) => {
         ? path
         : Buffer.alloc(0);
 
-      // Send error message when data is not buffer
       if (!Buffer.isBuffer(data)) throw new TypeError("Result is not a buffer");
-      // Get file type from buffer data
+
       let type = (await fileTypeFromBuffer(data)) || {
         mime: "application/octet-stream",
         ext: ".bin",
@@ -154,22 +156,21 @@ const simplifySocket = (sock) => {
   };
 
   /**
+   * Send a file message with optional settings.
    *
-   * @param {string} jid
-   * @param {*} path
-   * @param {string} filename
-   * @param {string} caption
-   * @param {object} options
-   * @returns
+   * @param {string} jid - The JID to send the file to.
+   * @param {string|Buffer} path - The path to the file or data source.
+   * @param {string} [filename=''] - The name of the file.
+   * @param {string} [caption=''] - The caption for the file.
+   * @param {import("./type").MessageOptions|undefined} options - Additional options for sending the file.
+   * @returns {Promise<proto.IWebMessageInfo|undefined>} - A promise indicating the success of the operation.
    */
   const sendFile = async (jid, path, filename = "", caption = "", options) => {
-    // Get file details
     let type = await getFile(path);
     let { res, data: file } = type;
 
     let content = {};
 
-    // Send error message when file details error
     if ((res && res.status !== 200) || file.length <= 65536) {
       try {
         throw { json: JSON.parse(file.toString()) };
@@ -178,16 +179,13 @@ const simplifySocket = (sock) => {
       }
     }
 
-    // Create sticker message config
     if (options?.asSticker) {
       content = {
         sticker: await convertToWEBP(file, type.ext),
         mentions: options?.mentions,
         isAnimated: true,
       };
-    }
-    // Create document message config
-    else if (options?.asDocument) {
+    } else if (options?.asDocument) {
       content = {
         caption,
         filename,
@@ -195,10 +193,7 @@ const simplifySocket = (sock) => {
         mimetype: type.mime,
         mentions: options?.mentions,
       };
-      // Create document message config
-    }
-    // Create GIF message config
-    else if (options?.asGIF && /video/.test(type.mime)) {
+    } else if (options?.asGIF && /video/.test(type.mime)) {
       content = {
         caption,
         filename,
@@ -207,9 +202,7 @@ const simplifySocket = (sock) => {
         mentions: options?.mentions,
         gifPlayback: true,
       };
-    }
-    // Create image message config
-    else if (/image/.test(type.mime)) {
+    } else if (/image/.test(type.mime)) {
       content = {
         caption,
         filename,
@@ -217,9 +210,7 @@ const simplifySocket = (sock) => {
         mimetype: type.mime,
         mentions: options?.mentions,
       };
-    }
-    // Create video message config
-    else if (/video/.test(type.mime)) {
+    } else if (/video/.test(type.mime)) {
       content = {
         caption,
         filename,
@@ -227,9 +218,7 @@ const simplifySocket = (sock) => {
         mimetype: type.mime,
         mentions: options?.mentions,
       };
-    }
-    // Create audio message config
-    else if (/audio/.test(type.mime)) {
+    } else if (/audio/.test(type.mime)) {
       content = {
         caption,
         filename,
@@ -237,9 +226,7 @@ const simplifySocket = (sock) => {
         mimetype: type.mime,
         mentions: options?.mentions,
       };
-    }
-    // Create document message config (default)
-    else {
+    } else {
       content = {
         caption,
         filename,
@@ -249,44 +236,37 @@ const simplifySocket = (sock) => {
       };
     }
 
-    // Delete unused options
     delete options?.asDocument;
     delete options?.asGIF;
     delete options?.asSticker;
     delete options?.mentions;
 
-    // Send message with created message's config
     return sock.sendMessage(jid, content, options);
   };
 
   /**
+   * Send a contact message with vCards.
    *
-   * @param {string} jid
-   * @param {Array} contacts
-   * @param {string} displayName
-   * @param {object} options
-   * @returns
+   * @param {string} jid - The JID to send the contact to.
+   * @param {import("./type").ContactMessage[]} contacts - An array of contact objects.
+   * @param {string} displayName - The display name for the contacts.
+   * @param {MessageOptions|undefined} options - Additional options for sending the contact.
+   * @returns {Promise<proto.IWebMessageInfo|undefined>} - A promise indicating the success of the operation.
    */
   const sendContact = async (jid, contacts, displayName, options) => {
     console.log(contacts);
     const vcards = await Promise.all(
       contacts.map(async ({ number, name }) => {
-        // Remove non-numeric from number
         number = number.replace(/[^0-9]/g, "");
-        // Number to jid
         let njid = number + "@s.whatsapp.net";
-        // Check is business
         let { isBusiness } = ((await sock.onWhatsApp(njid))[0]?.exists &&
           (await sock.getBusinessProfile(njid))) || {
           isBusiness: false,
         };
 
-        // Parse phone number
         const parsedPhoneNumber = parsePhoneNumber("+" + number)?.number
           ?.international;
-        // Parse name
         const vcardName = name.replace(/\n/g, "\\n");
-        // Get business description
         const businessDesc = isBusiness
           ? ((await sock.getBusinessProfile(njid)).description || "").replace(
               /\n/g,
@@ -294,12 +274,10 @@ const simplifySocket = (sock) => {
             )
           : "";
 
-        // Add business data
         const businessExtension =
           `X-WA-BIZ-NAME:${vcardName}\n` +
           `X-WA-BIZ-DESCRIPTION:${businessDesc}\n`;
 
-        // Create vcard string
         return {
           vcard:
             "BEGIN:VCARD\n" +
@@ -313,12 +291,9 @@ const simplifySocket = (sock) => {
       }),
     );
 
-    // Get mentions
     const mentions = options?.mentions;
-    // Remove unused options
     delete options?.mentions;
 
-    // Send contact message
     return sock.sendMessage(
       jid,
       {
@@ -329,117 +304,165 @@ const simplifySocket = (sock) => {
     );
   };
 
+  // Set author
+  sock.author_jid = process.env.OWNER_JID;
+  sock.author_name = process.env.OWNER_NAME;
+
+  // Set dbPath
+  sock.dbPath = path.resolve(
+    path.join(process.cwd(), process.env.LOCALDB_PATH),
+  );
+
+  // Import local db files
+  const importLocalDB = (() => {
+    // Import local db files
+    if (!existsSync(sock.dbPath)) writeFileSync(sock.dbPath, "{}");
+    try {
+      sock.db = JSON.parse(readFileSync(sock.dbPath));
+    } catch (err) {
+      console.log("[Failed import local db]", err.toString());
+    }
+
+    // Watch local db files update and re-import
+    watch(sock.dbPath, "utf8", () => {
+      if (!existsSync(sock.dbPath)) writeFileSync(sock.dbPath, "{}");
+      try {
+        sock.db = JSON.parse(readFileSync(sock.dbPath));
+      } catch (err) {
+        console.log("[Failed import local db]", err.toString());
+      }
+    });
+  })();
+
+  // Save chats to file store
+  sock.store = makeInMemoryStore({});
+  sock.store.readFromFile(process.env.STORE_PATH);
+  setInterval(() => {
+    sock.store.writeToFile(process.env.STORE_PATH);
+  }, 1000);
+
+  // Bind event to store
+  sock.store.bind(sock.ev);
+
+  // Queue
+  sock.queue = [];
+  sock.addQueue = (cb) => sock.queue.push(async () => await cb());
+
   return { ...sock, getFile, sendFile, sendContact };
 };
 
 /**
+ * Simplifies a received message.
  *
- * @param {*} sock
- * @param {proto.IWebMessageInfo} m
+ * @param {import("./type").SimplifiedSocket} sock - The socket handling the message.
+ * @param {proto.IWebMessageInfo} m - The received message.
+ * @returns {import("./type").SimplifiedMessage} - The simplified message.
  */
 const simplifyMessage = (sock, m) => {
-  // Get is message sent by baileys
   const isBaileys = m.key?.id.startsWith("BAE5");
 
   /**
+   * Reply to a message with content and options.
    *
-   * @param {object|string} content
-   * @param {object|null} options
-   * @returns
+   * @param {import("./type").ReplyContent} content - The content to send in the reply.
+   * @param {import("./type").MessageOptions} options - Additional options for sending the reply.
+   * @returns {Promise<proto.IWebMessageInfo|undefined>} - A promise indicating the success of the operation.
    */
   const reply = async (content, options) => {
-    // Reply as contact
-    if (content.contact) {
-      // Send contacts when required options are met with quoted message
-      if (content.contact.contacts && content.contact.displayName) {
-        const { contacts, displayName } = content.contact;
-        return sock.sendContact(m.key?.remoteJid, contacts, displayName, {
-          ...options,
-          quoted: m,
-        });
-      }
-    }
-    // Reply as contact
-    else if (options?.isMedia) {
-      // Delete unused options
-      delete options?.isMedia;
-      const { media, filename, caption } = content;
-      // Send file with quoted message
-      return sock.sendFile(m.key?.remoteJid, media, filename, caption, {
-        ...options,
-        quoted: m,
-      });
-    }
-    // Reply as conversation
-    else {
-      // Get mentions
+    if (typeof content == "string") {
       const mentions = options?.mentions;
-      // Delete unused options
       delete options?.mentions;
-      // Send conversation message with quoted message
       return sock.sendMessage(
         m.key?.remoteJid,
         { text: content, mentions: mentions },
         { ...options, quoted: m },
       );
     }
+
+    if (content?.contact) {
+      if (content?.contact.contacts && content?.contact.displayName) {
+        const { contacts, displayName } = content?.contact;
+        return sock.sendContact(m.key?.remoteJid, contacts, displayName, {
+          ...options,
+          quoted: m,
+        });
+      }
+    } else if (options?.isMedia) {
+      delete options?.isMedia;
+      const { media, filename, caption } = content;
+      return sock.sendFile(m.key?.remoteJid, media, filename, caption, {
+        ...options,
+        quoted: m,
+      });
+    }
   };
 
-  // Get message author
+  reply();
+
   m.key.author = m.key?.participant || m.key?.remoteJid;
-  // Check message is from group
   m.key.fromGroup = m.key?.remoteJid?.endsWith("@g.us");
-  // Check message is from baileys
   m.key.isBaileys = isBaileys;
   m.reply = reply;
-  // Get text from message (conversation/caption)
-  m.text =
-    m?.message?.conversation ||
-    m?.message?.extendedTextMessage?.text ||
-    m?.message?.imageMessage?.caption ||
-    m?.message?.videoMessage?.caption ||
-    m?.message?.documentMessage?.caption ||
-    m?.message?.documentWithCaptionMessage?.message?.conversation ||
-    m?.message?.documentWithCaptionMessage?.message?.imageMessage?.caption ||
-    m?.message?.documentWithCaptionMessage?.message?.videoMessage?.caption ||
-    m?.message?.documentWithCaptionMessage?.message?.documentMessage?.caption ||
-    m?.message?.viewOnceMessage?.message?.conversation ||
-    m?.message?.viewOnceMessage?.message?.imageMessage?.caption ||
-    m?.message?.viewOnceMessage?.message?.videoMessage?.caption ||
-    m?.message?.viewOnceMessage?.message?.documentMessage?.caption ||
-    m?.message?.viewOnceMessage?.message?.documentWithCaptionMessage?.message
-      ?.conversation ||
-    m?.message?.viewOnceMessage?.message?.documentWithCaptionMessage?.message
-      ?.imageMessage?.caption ||
-    m?.message?.viewOnceMessage?.message?.documentWithCaptionMessage?.message
-      ?.videoMessage?.caption ||
-    m?.message?.viewOnceMessage?.message?.documentWithCaptionMessage?.message
-      ?.documentMessage?.caption ||
-    m?.message?.viewOnceMessageV2?.message?.conversation ||
-    m?.message?.viewOnceMessageV2?.message?.imageMessage?.caption ||
-    m?.message?.viewOnceMessageV2?.message?.videoMessage?.caption ||
-    m?.message?.viewOnceMessageV2?.message?.documentMessage?.caption ||
-    m?.message?.viewOnceMessageV2?.message?.documentWithCaptionMessage?.message
-      ?.conversation ||
-    m?.message?.viewOnceMessageV2?.message?.documentWithCaptionMessage?.message
-      ?.imageMessage?.caption ||
-    m?.message?.viewOnceMessageV2?.message?.documentWithCaptionMessage?.message
-      ?.videoMessage?.caption;
-  m?.message?.viewOnceMessageV2?.message?.documentWithCaptionMessage?.message
-    ?.documentMessage?.caption;
-  m?.message?.viewOnceMessageV2Extension?.message?.conversation ||
-    m?.message?.viewOnceMessageV2Extension?.message?.imageMessage?.caption ||
-    m?.message?.viewOnceMessageV2Extension?.message?.videoMessage?.caption ||
-    m?.message?.viewOnceMessageV2Extension?.message?.documentMessage?.caption ||
-    m?.message?.viewOnceMessageV2Extension?.message?.documentWithCaptionMessage
-      ?.message?.conversation ||
-    m?.message?.viewOnceMessageV2Extension?.message?.documentWithCaptionMessage
-      ?.message?.imageMessage?.caption ||
-    m?.message?.viewOnceMessageV2Extension?.message?.documentWithCaptionMessage
-      ?.message?.videoMessage?.caption;
-  m?.message?.viewOnceMessageV2Extension?.message?.documentWithCaptionMessage
-    ?.message?.documentMessage?.caption || "";
 
+  /**
+   *
+   * @returns {string}
+   */
+  function extractCaption() {
+    const message = m?.message;
+    if (!message) return "";
+
+    return (
+      message?.conversation ||
+      message?.extendedTextMessage?.text ||
+      message?.imageMessage?.caption ||
+      message?.videoMessage?.caption ||
+      message?.documentMessage?.caption ||
+      message?.documentWithCaptionMessage?.message?.conversation ||
+      message?.documentWithCaptionMessage?.message?.imageMessage?.caption ||
+      message?.documentWithCaptionMessage?.message?.videoMessage?.caption ||
+      message?.documentWithCaptionMessage?.message?.documentMessage?.caption ||
+      message?.viewOnceMessage?.message?.conversation ||
+      message?.viewOnceMessage?.message?.imageMessage?.caption ||
+      message?.viewOnceMessage?.message?.videoMessage?.caption ||
+      message?.viewOnceMessage?.message?.documentMessage?.caption ||
+      message?.viewOnceMessage?.message?.documentWithCaptionMessage?.message
+        ?.conversation ||
+      message?.viewOnceMessage?.message?.documentWithCaptionMessage?.message
+        ?.imageMessage?.caption ||
+      message?.viewOnceMessage?.message?.documentWithCaptionMessage?.message
+        ?.videoMessage?.caption ||
+      message?.viewOnceMessage?.message?.documentWithCaptionMessage?.message
+        ?.documentMessage?.caption ||
+      message?.viewOnceMessageV2?.message?.conversation ||
+      message?.viewOnceMessageV2?.message?.imageMessage?.caption ||
+      message?.viewOnceMessageV2?.message?.videoMessage?.caption ||
+      message?.viewOnceMessageV2?.message?.documentMessage?.caption ||
+      message?.viewOnceMessageV2?.message?.documentWithCaptionMessage?.message
+        ?.conversation ||
+      message?.viewOnceMessageV2?.message?.documentWithCaptionMessage?.message
+        ?.imageMessage?.caption ||
+      message?.viewOnceMessageV2?.message?.documentWithCaptionMessage?.message
+        ?.videoMessage?.caption ||
+      message?.viewOnceMessageV2?.message?.documentWithCaptionMessage?.message
+        ?.documentMessage?.caption ||
+      message?.viewOnceMessageV2Extension?.message?.conversation ||
+      message?.viewOnceMessageV2Extension?.message?.imageMessage?.caption ||
+      message?.viewOnceMessageV2Extension?.message?.videoMessage?.caption ||
+      message?.viewOnceMessageV2Extension?.message?.documentMessage?.caption ||
+      message?.viewOnceMessageV2Extension?.message?.documentWithCaptionMessage
+        ?.message?.conversation ||
+      message?.viewOnceMessageV2Extension?.message?.documentWithCaptionMessage
+        ?.message?.imageMessage?.caption ||
+      message?.viewOnceMessageV2Extension?.message?.documentWithCaptionMessage
+        ?.message?.videoMessage?.caption ||
+      message?.viewOnceMessageV2Extension?.message?.documentWithCaptionMessage
+        ?.message?.documentMessage?.caption ||
+      ""
+    );
+  }
+
+  m.text = extractCaption();
   return m;
 };
 

@@ -2,7 +2,7 @@ const { spawn } = require("child_process");
 
 /**
  *
- * @returns
+ * @returns {Promise<boolean>}
  */
 const ffmpegSupport = () => {
   return new Promise((resolve) => {
@@ -20,7 +20,7 @@ const ffmpegSupport = () => {
 
 /**
  *
- * @returns
+ * @returns {Promise<boolean>}
  */
 const imagemagickConvertSupport = () => {
   return new Promise((resolve) => {

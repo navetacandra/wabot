@@ -1,3 +1,4 @@
+require("dotenv").config();
 const { proto } = require("@whiskeysockets/baileys");
 const { readFileSync, writeFileSync, existsSync } = require("fs");
 const { resolve, join } = require("path");
@@ -42,7 +43,9 @@ const messageLogger = (sock, m) => {
   }
   const before = existsSync(location) ? readFileSync(location, "utf-8") : "";
 
-  writeFileSync(location, `${before}${message}\n`, "utf-8");
+  if (JSON.parse(process.env.SAVE_LOG2FILE || "false")) {
+    writeFileSync(location, `${before}${message}\n`, "utf-8");
+  }
   console.log(message);
 };
 
