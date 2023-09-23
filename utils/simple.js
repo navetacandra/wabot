@@ -37,10 +37,10 @@ const convertToWEBP = (data, ext) => {
     }
     // Declare file name
     const filenameData = path.resolve(
-      path.join(__dirname, "..", "temp", `${Date.now()}-${v4()}.${ext}`),
+      path.join(__dirname, "..", "temp", `${Date.now()}-${v4()}.${ext}`)
     );
     const filenameResult = path.resolve(
-      path.join(__dirname, "..", "temp", `${Date.now()}-${v4()}.webp`),
+      path.join(__dirname, "..", "temp", `${Date.now()}-${v4()}.webp`)
     );
 
     // Write input file
@@ -81,29 +81,33 @@ const simplifySocket = (sock) => {
    * @returns
    */
   const getFile = async (path) => {
-    let res;
-    // Get buffer data from path
-    let data = Buffer.isBuffer(path)
-      ? path
-      : /^data:.*?\/.*?;base64,/i.test(path)
-      ? Buffer.from(path.split`,`[1], "base64")
-      : /^https?:\/\//.test(path)
-      ? await (res = await fetch(path)).buffer()
-      : existsSync(path)
-      ? readFileSync(path)
-      : typeof path === "string"
-      ? path
-      : Buffer.alloc(0);
+    try {
+      let res;
+      // Get buffer data from path
+      let data = Buffer.isBuffer(path)
+        ? path
+        : /^data:.*?\/.*?;base64,/i.test(path)
+        ? Buffer.from(path.split`,`[1], "base64")
+        : /^https?:\/\//.test(path)
+        ? await (res = await fetch(path)).buffer()
+        : existsSync(path)
+        ? readFileSync(path)
+        : typeof path === "string"
+        ? path
+        : Buffer.alloc(0);
 
-    // Send error message when data is not buffer
-    if (!Buffer.isBuffer(data)) throw new TypeError("Result is not a buffer");
-    // Get file type from buffer data
-    let type = (await fileTypeFromBuffer(data)) || {
-      mime: "application/octet-stream",
-      ext: ".bin",
-    };
+      // Send error message when data is not buffer
+      if (!Buffer.isBuffer(data)) throw new TypeError("Result is not a buffer");
+      // Get file type from buffer data
+      let type = (await fileTypeFromBuffer(data)) || {
+        mime: "application/octet-stream",
+        ext: ".bin",
+      };
 
-    return { res, ...type, data };
+      return { res, ...type, data };
+    } catch (err) {
+      console.log(err);
+    }
   };
 
   /**
@@ -132,7 +136,7 @@ const simplifySocket = (sock) => {
     }
 
     // Create sticker message config
-    if (options.asSticker) {
+    if (options?.asSticker) {
       content = {
         sticker: await convertToWEBP(file, type.ext),
         mentions: options?.mentions,
@@ -140,7 +144,7 @@ const simplifySocket = (sock) => {
       };
     }
     // Create document message config
-    else if (options.asDocument) {
+    else if (options?.asDocument) {
       content = {
         caption,
         filename,
@@ -151,7 +155,7 @@ const simplifySocket = (sock) => {
       // Create document message config
     }
     // Create GIF message config
-    else if (options.asGIF && /video/.test(type.mime)) {
+    else if (options?.asGIF && /video/.test(type.mime)) {
       content = {
         caption,
         filename,
@@ -243,7 +247,7 @@ const simplifySocket = (sock) => {
         const businessDesc = isBusiness
           ? ((await sock.getBusinessProfile(njid)).description || "").replace(
               /\n/g,
-              "\\n",
+              "\\n"
             )
           : "";
 
@@ -263,7 +267,7 @@ const simplifySocket = (sock) => {
             (isBusiness ? businessExtension : "") +
             "END:VCARD".trim(),
         };
-      }),
+      })
     );
 
     // Get mentions
@@ -278,7 +282,7 @@ const simplifySocket = (sock) => {
         contacts: { contacts: vcards, displayName: displayName },
         mentions: mentions,
       },
-      options,
+      options
     );
   };
 
@@ -333,7 +337,7 @@ const simplifyMessage = (sock, m) => {
       return sock.sendMessage(
         m.key?.remoteJid,
         { text: content, mentions: mentions },
-        { ...options, quoted: m },
+        { ...options, quoted: m }
       );
     }
   };
